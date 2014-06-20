@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -40,11 +41,11 @@ type Task struct {
 func (t *Task) Run(r chan (Task)) {
 	defer func() {
 		if e := recover(); e != nil {
-			fmt.Fprintln(os.Stderr, e)
+			fmt.Sprintln(os.Stderr, e)
 		}
 	}()
 	url_ := t.GetUrl()
-	fmt.Println("Parse Url: ", url_)
+	log.Println("scan ", url_)
 	res, err := Head(url_)
 	if err != nil {
 		r <- *t
@@ -123,7 +124,7 @@ func main() {
 
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Println(r)
+			log.Println(r)
 		}
 	}()
 
@@ -154,6 +155,4 @@ func main() {
 	}
 
 	resultFile.Close()
-
-	fmt.Println("done")
 }
