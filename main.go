@@ -20,8 +20,8 @@ Options:
   -h --help             Show help
   --version             Show version
   --ip <ip>             Will scan ip
-  --ip-range <range>    Will scan ip in ip range
-  --port <port>         scan port
+  --ip-range <range>    Will scan ip-range
+  --port <port>         port
   --timeout <timeout>   timeout, default 1s
     `
 }
