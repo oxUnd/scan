@@ -1,88 +1,47 @@
 package main
 
 import (
-	"flag"
+	"./core"
 	"fmt"
-	"log"
-	"net"
-	"net/http"
-	"os"
+	opt "github.com/docopt/docopt-go"
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 )
 
-func dialTimeout(network, addr string) (net.Conn, error) {
-	var timeout_ = time.Duration(1 * time.Second)
-	return net.DialTimeout(network, addr, timeout_)
+func usage() string {
+	return `
+
+Usage:
+    scan --ip <ip> [--port <port>][--timeout <timeout>]
+    scan --ip-range <range> [--port <port>][--timeout <timeout>]
+
+Options:
+  -h --help             Show help
+  --version             Show version
+  --ip <ip>             Will scan ip
+  --ip-range <range>    Will scan ip in ip range
+  --port <port>         scan port
+  --timeout <timeout>   timeout, default 1s
+    `
 }
 
-func Head(url string) (*http.Response, error) {
-
-	transport := http.Transport{
-		Dial: dialTimeout,
+func getPort(s string) []int {
+	sep := ","
+	if strings.Index(s, sep) == -1 {
+		result, _ := strconv.Atoi(s)
+		return []int{result}
 	}
-
-	client := http.Client{
-		Transport: &transport,
+	splits := strings.Split(s, sep)
+	ret := []int{}
+	for _, ss := range splits {
+		result, _ := strconv.Atoi(ss)
+		ret = append(ret, result)
 	}
-
-	return client.Head(url)
+	return ret
 }
 
-type Task struct {
-	ip     string
-	url_   string
-	result map[string]string
-	status int
-}
-
-func (t *Task) Run(r chan (Task)) {
-	defer func() {
-		if e := recover(); e != nil {
-			fmt.Sprintln(os.Stderr, e)
-		}
-	}()
-	url_ := t.GetUrl()
-	log.Println("scan ", url_)
-	res, err := Head(url_)
-	if err != nil {
-		r <- *t
-		panic(err)
-		return
-	}
-	t.status = res.StatusCode
-	t.result["server"] = res.Header.Get("Server")
-	r <- *t
-}
-
-func (t Task) Ip() string {
-	return t.ip
-}
-
-func (t *Task) GetUrl() string {
-	if len(t.url_) > 0 {
-		return t.url_
-	}
-	return "http://" + t.ip + "/"
-}
-
-func (t Task) Status() int {
-	return t.status
-}
-
-func (t Task) Result() map[string]string {
-	return t.result
-}
-
-var ips string
-
-func init() {
-	flag.StringVar(&ips, "ips", "10.10.10.1-255", "please enter IP range.")
-}
-
-func ParseIps(ipRange string) []string {
+func getAllIp(ipRange string) []string {
 	ips := []string{}
 	p := strings.Index(ipRange, "-")
 	if p < 0 {
@@ -113,46 +72,57 @@ func ParseIps(ipRange string) []string {
 	return ips
 }
 
+func run(id int, ip string, ports []int, reports *[]core.Report, timeout string) {
+	task := core.NewTask(id, ip, ports, false)
+	worker := core.NewWorker(1, &task, reports, timeout)
+	worker.ScanHttp()
+}
+
 func main() {
-	flag.Parse()
-	range_ := ParseIps(ips)
-	count := len(range_)
 
-	if count == 0 {
-		panic("Must given a ip.")
-	}
+	arguments, err := opt.Parse(usage(), nil, true, "2.0", false)
 
-	defer func() {
-		if r := recover(); r != nil {
-			log.Println(r)
-		}
-	}()
-
-	var task Task
-	r := make(chan (Task))
-	for _, v := range range_ {
-		task = Task{
-			ip:     v,
-			result: make(map[string]string),
-		}
-
-		go func(task Task) {
-			task.Run(r)
-		}(task)
-	}
-
-	resultFile, err := os.OpenFile("./res.log", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0777)
 	if err != nil {
 		panic(err)
 	}
 
-	for i := 0; i < count; i++ {
-		ret := <-r
-		result := ret.Result()
-		if server, ok := result["server"]; ok {
-			resultFile.WriteString(fmt.Sprintln(ret.Ip(), " ", server))
-		}
+	ports := []int{80}
+	if arguments["--port"] != nil {
+		ports = getPort(arguments["--port"].(string))
 	}
 
-	resultFile.Close()
+	timeout := "1s"
+	if arguments["--timeout"] != nil {
+		timeout = arguments["--timeout"].(string)
+	}
+
+	reports := []core.Report{}
+	if arguments["--ip"] == nil {
+		//ip range
+		ipRange := arguments["--ip-range"].(string)
+		ips := getAllIp(ipRange)
+		fmt.Println(ips)
+		howManyIp := len(ips)
+		wait := make(chan (bool))
+		for idx, ip := range ips {
+			go func(idx int, ip string) {
+				run(idx, ip, ports, &reports, timeout)
+				wait <- true
+			}(idx, ip)
+		}
+		//wait all child task done.
+		for i := 0; i < howManyIp; i++ {
+			<-wait
+		}
+
+	} else {
+		//ip
+		run(0, arguments["--ip"].(string), ports, &reports, timeout)
+	}
+
+	for _, r := range reports {
+		r.Dump()
+	}
+
+	fmt.Println("done")
 }
