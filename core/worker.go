@@ -49,11 +49,11 @@ func (w Worker) ScanHttp() {
 			if err != nil {
 				r.CatchError(err)
 			} else {
+				ret = true
 				r.Add("Header", res.Header)
 				r.Add("Server", res.Header.Get("Server"))
 			}
 			w.addReport(r)
-			ret = true
 			wait <- ret
 		}(port)
 	}
