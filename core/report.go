@@ -32,14 +32,6 @@ func (r *Report) Add(key string, val interface{}) {
 	r.result[key] = val
 }
 
-func (r *Report) catchError(err error) {
+func (r *Report) CatchError(err error) {
 	r.err = err
-}
-
-func (r Report) GetString() string {
-	return ""
-}
-
-func (r Report) GetJSON() string {
-	return ""
 }

@@ -7,7 +7,7 @@ import (
 
 const (
 	HTTP = "http"
-	FTP  = "FTP"
+	FTP  = "ftp"
 )
 
 func NewWorker(id int, task *Task, reports *[]Report, timeout string) Worker {
@@ -49,7 +49,7 @@ func (w Worker) ScanHttp() (int, error) {
 			r := NewReport(rand.Int(), w.task.GetIp(), w.task.GetProtocol(), port)
 			if err != nil {
 				ret[url_] = err
-				r.catchError(err)
+				r.CatchError(err)
 			} else {
 				r.Add("Header", res.Header)
 				r.Add("Server", res.Header.Get("Server"))
